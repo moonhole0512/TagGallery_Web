@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import Optional
+import send2trash
 
 # Local modules
 import database
@@ -25,6 +26,9 @@ templates = Jinja2Templates(directory="templates")
 class AppConfig(BaseModel):
     image_file_path: str
     des_file_path: str
+
+class DeleteRequest(BaseModel):
+    image_ids: list[int]
 
 # --- Configuration ---
 def get_config(mount_images=True):
@@ -151,3 +155,19 @@ def get_single_image(image_id: int):
         return image
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve image details: {e}")
+
+@app.delete("/api/images/batch")
+async def delete_images_batch(request: DeleteRequest):
+    try:
+        filepaths = database.delete_images_by_ids(request.image_ids)
+        deleted_count = 0
+        for filepath in filepaths:
+            if os.path.exists(filepath):
+                send2trash.send2trash(filepath)
+                deleted_count += 1
+                print(f"파일을 휴지통으로 이동했습니다: {filepath}")
+            else:
+                print(f"경고: 파일을 찾을 수 없어 휴지통으로 이동하지 못했습니다: {filepath}")
+        return {"message": f"{len(request.image_ids)}개의 레코드를 데이터베이스에서 삭제하고, {deleted_count}개의 파일을 휴지통으로 이동했습니다."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"이미지 삭제 실패: {e}")

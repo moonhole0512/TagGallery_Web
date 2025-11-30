@@ -103,7 +103,6 @@ class ImageGalleryApp(ctk.CTk):
         super().__init__()
 
         self.title("TagGallery_V1.0")
-        #self.geometry("1450x1000")
         self.geometry("1340x960")
         
         self.searchList = []
@@ -112,15 +111,22 @@ class ImageGalleryApp(ctk.CTk):
         
         self.dbNo = 0
         self.dbPath = ""
+        self.selected_items = []
+        self.selection_mode = False
         
         self.image_references = {'thumbnails': [], 'selected': []}
+        self.displayed_widgets = []
         
         self.create_widgets()
 
     def create_widgets(self):
         # 상단 프레임 생성 
         top_frame = ctk.CTkFrame(self)
-        top_frame.pack(fill=ctk.X, padx=5, pady=(5, 0))  # 하단 패딩 제거
+        top_frame.pack(fill=ctk.X, padx=5, pady=(5, 0))
+
+        # 삭제 버튼
+        self.selection_button = ctk.CTkButton(top_frame, text="선택", command=self.toggle_selection_mode, width=50, height=28)
+        self.selection_button.pack(side=ctk.LEFT, padx=(5, 5))
 
         # Tags 라벨과 입력 필드
         self.tag_label = ctk.CTkLabel(top_frame, text="Tags")
@@ -172,7 +178,6 @@ class ImageGalleryApp(ctk.CTk):
         # 선택된 이미지 영역 (오른쪽 상단)
         self.selectimg_area = ctk.CTkFrame(right_area)
         self.selectimg_area.pack(fill=ctk.BOTH, expand=True, padx=0, pady=0)
-        self.bind("<Delete>", self.deleteImg)
         
         # 선택된 이미지 태그 텍스트 (오른쪽 하단)
         self.selected_img_tag_text = ctk.CTkTextbox(right_area, wrap="word")
@@ -187,154 +192,118 @@ class ImageGalleryApp(ctk.CTk):
             self.currentPage = int(current_value)
             self.update_page()
     
-    def deleteImg(self, event):
-        print("삭제함수 들어옴")
-        print(f"삭제대상[{self.dbNo}] - {self.dbPath}")
-        if CTkMessagebox(title="선택된 이미지 삭제", message="선택한 이미지를 삭제합니다.", icon="question", option_1="Yes", option_2="No").get() == "Yes":
-            print("삭제진행")
+    def toggle_selection_mode(self):
+        print(f"Selection mode toggled. Current state: {self.selection_mode}")
+        self.selection_mode = not self.selection_mode
+        if self.selection_mode:
+            self.selection_button.configure(text="삭제 실행")
+        else:
+            if self.selected_items:
+                self.delete_selected_files()
+            self.selection_button.configure(text="선택")
+            # Clear selection and visuals after exiting mode
+            self.selected_items.clear()
+            self._update_selection_visuals()
+
+    def delete_selected_files(self):
+        if not self.selected_items:
+            CTkMessagebox(title="삭제 오류", message="삭제할 이미지를 선택하세요.", icon="warning")
+            return
+
+        msg = f"선택한 이미지 {len(self.selected_items)}개를 휴지통으로 이동합니다."
+        if CTkMessagebox(title="선택된 이미지 삭제", message=msg, icon="question", option_1="Yes", option_2="No").get() == "Yes":
             conn = sqlite3.connect("image_gallery.db")
             cursor = conn.cursor()
-    
             try:
-                cursor.execute("SELECT * FROM NAIimgInfo WHERE no = ?", (self.dbNo,))
-                record = cursor.fetchone()
-                if not record:
-                    print(f"Error: 레코드가 존재하지 않습니다. (no={self.dbNo})")
-                    return
-            
-                if not os.path.exists(self.dbPath):
-                    print(f"Error: 파일이 존재하지 않습니다. ({self.dbPath})")
-                    return
-            
-                cursor.execute("DELETE FROM NAIimgInfo WHERE no = ?", (self.dbNo,))
-                print(f"레코드 삭제 성공 (no={self.dbNo})")
-            
-                os.remove(self.dbPath)
-                print(f"파일 삭제 성공 ({self.dbPath})")
-            
+                for item in self.selected_items:
+                    db_id = item['id']
+                    path = item['path']
+                    
+                    cursor.execute("SELECT * FROM NAIimgInfo WHERE no = ?", (db_id,))
+                    if not cursor.fetchone():
+                        print(f"Warning: 레코드가 이미 삭제되었습니다. (no={db_id})")
+                        continue
+                    
+                    if not os.path.exists(path):
+                        print(f"Warning: 파일이 이미 삭제되었습니다. ({path})")
+                        cursor.execute("DELETE FROM NAIimgInfo WHERE no = ?", (db_id,))
+                        continue
+                    
+                    # Delete from DB and send to trash
+                    cursor.execute("DELETE FROM NAIimgInfo WHERE no = ?", (db_id,))
+                    send2trash.send2trash(path)
+                    print(f"휴지통으로 이동: (no={db_id}, path={path})")
+
                 conn.commit()
                 
-                self.search_images(0)
-                self.update_page()
-            
             except Exception as ex:
+                conn.rollback()
                 print(f"Error: {ex}")
-            
+                traceback.print_exc()
+                CTkMessagebox(title="삭제 오류", message=f"이미지 삭제 중 오류가 발생했습니다:\n{ex}", icon="cancel")
             finally:
                 conn.close()
-        else:
-            print("삭제취소")
-        
-    def sqlTagSearch(self, searchTags, order='DESC', plat='ALL'):
-        conn = sqlite3.connect("image_gallery.db")
-        cursor = conn.cursor()
-        
-        tags_list = searchTags.split(',')
 
-        conditions = []
-        for tag in tags_list:
-            conditions.append("tags LIKE ?")
-        
-        query_condition = " AND ".join(conditions)
-        
-        platform_query = " "
-        if plat == 'NAI':
-            platform_query = " and platform='NovelAI' "
-        elif plat == 'DIF':
-            platform_query = " and platform='StableDiffution' "
-        elif plat == 'None':
-            platform_query = " and platform='' "
-        
-        query = ""
-        if order == 'RANDOM':
-            query = f"SELECT * FROM NAIimgInfo WHERE {query_condition} {platform_query} ORDER BY RANDOM()"
-        else:
-            query = f"SELECT * FROM NAIimgInfo WHERE {query_condition} {platform_query} ORDER BY makeTime {order} "
-
-        cursor.execute(query, ['%' + tag.strip() + '%' for tag in tags_list])
-        
-        result = cursor.fetchall()
-        
-        conn.close()
-        
-        return result if result else ['검색결과가 없습니다.']
-
-    def search_images(self, searchtype):
-        if searchtype == 1:
-            self.currentPage = 1
-        print("검색호출")
-        print(self.textbox_tags.get())
-        self.searchList = self.sqlTagSearch(self.textbox_tags.get(), self.order_var.get(), self.Platorder_var.get())
-        print(f"검색 결과 : {len(self.searchList)}")
-        max_page = math.ceil(len(self.searchList) / self.maxDisplay)
-        if self.currentPage > max_page:
-            self.currentPage = max_page
-            ctk.CTkMessagebox(title="Warning", message="최대 페이지를 초과했습니다.", icon="warning")
-        
-        self.update_page()
-
-    def update_page(self):
-        max_page = math.ceil(len(self.searchList) / self.maxDisplay)
-        if self.currentPage > max_page:
-            self.currentPage = max_page
-            ctk.CTkMessagebox(title="Warning", message="최대 페이지를 초과했습니다.", icon="warning")
-        
-        self.page_label.configure(text=f"/{max_page}")
-        self.currentpagebox.delete(0, "end")
-        self.currentpagebox.insert(0, self.currentPage)
-
-        start_idx = (self.currentPage - 1) * self.maxDisplay
-        end_idx = start_idx + self.maxDisplay
-        current_images = self.searchList[start_idx:end_idx]
-        
-        self.display_images(current_images)
-        
+            # Clear selection and refresh UI
+            self.selected_items.clear()
+            self.search_images(0)
+            self.update_page()
+    
     def on_image_click(self, event, dbno, path, tags):
-        # 이전에 선택된 이미지 삭제
-        for widget in self.selectimg_area.winfo_children():
-            widget.destroy()
-    
-        selected_img = Image.open(path)
-    
-        # `selectimg_area`의 예상 크기 설정
-        area_width = 550  # 또는 self.selectimg_area.winfo_width() 값 사용
-        area_height = 700  # 또는 self.selectimg_area.winfo_height() 값 사용
-    
-        # 이미지의 가로세로 비율 계산
-        img_ratio = selected_img.size[0] / selected_img.size[1]
-        area_ratio = area_width / area_height
-    
-        # `selectimg_area`에 이미지를 맞추기 위한 크기 계산
-        if img_ratio > area_ratio:
-            # 이미지의 가로가 더 넓을 경우, 가로를 기준으로 조정
-            new_width = area_width
-            new_height = int(area_width / img_ratio)
+        if self.selection_mode:
+            # --- Selection Mode Logic ---
+            item_data = {'id': dbno, 'path': path, 'widget': event.widget}
+            
+            selected_index = -1
+            for i, item in enumerate(self.selected_items):
+                if item['id'] == dbno:
+                    selected_index = i
+                    break
+
+            if selected_index != -1:
+                # Item is selected, so unselect it
+                self.selected_items.pop(selected_index)
+            else:
+                # Item is not selected, so select it
+                self.selected_items.append(item_data)
+            
+            self._update_selection_visuals()
         else:
-            # 이미지의 세로가 더 길거나 같을 경우, 세로를 기준으로 조정
-            new_height = area_height
-            new_width = int(area_height * img_ratio)
-    
-        # 이미지 크기 조정
-        selected_img = selected_img.resize((new_width, new_height), Image.LANCZOS)
-    
-        # 중앙에 배치하기 위해 여백 계산
-        padx = (area_width - new_width) // 2
-        pady = (area_height - new_height) // 2
-    
-        # 이미지를 CTkImage로 변환하여 라벨에 설정
-        selected_img = ctk.CTkImage(light_image=selected_img, size=(new_width, new_height))
-        selectimg_label = ctk.CTkLabel(self.selectimg_area, image=selected_img, text="")
-        selectimg_label.image = selected_img
-        selectimg_label.grid(row=0, column=0, padx=padx, pady=pady, sticky='nsew')
-        selectimg_label.bind("<Double-Button-1>", self.show_big_image)
-    
-        # 태그 정보 업데이트
-        self.selected_img_tag_text.delete("1.0", "end")
-        self.selected_img_tag_text.insert("1.0", tags)
-    
-        # 데이터베이스 정보 업데이트
-        self.dbNo = dbno
-        self.dbPath = path
+            # --- Normal Mode Logic ---
+            for widget in self.selectimg_area.winfo_children():
+                widget.destroy()
+        
+            selected_img = Image.open(path)
+        
+            area_width = 550
+            area_height = 700
+        
+            img_ratio = selected_img.size[0] / selected_img.size[1]
+            area_ratio = area_width / area_height
+        
+            if img_ratio > area_ratio:
+                new_width = area_width
+                new_height = int(area_width / img_ratio)
+            else:
+                new_height = area_height
+                new_width = int(area_height * img_ratio)
+        
+            selected_img = selected_img.resize((new_width, new_height), Image.LANCZOS)
+        
+            padx = (area_width - new_width) // 2
+            pady = (area_height - new_height) // 2
+        
+            selected_img_ctk = ctk.CTkImage(light_image=selected_img, size=(new_width, new_height))
+            selectimg_label = ctk.CTkLabel(self.selectimg_area, image=selected_img_ctk, text="")
+            selectimg_label.image = selected_img_ctk
+            selectimg_label.grid(row=0, column=0, padx=padx, pady=pady, sticky='nsew')
+            selectimg_label.bind("<Double-Button-1>", self.show_big_image)
+        
+            self.selected_img_tag_text.delete("1.0", "end")
+            self.selected_img_tag_text.insert("1.0", tags)
+
+            self.dbNo = dbno
+            self.dbPath = path
 
 
     def show_big_image(self, event):
@@ -342,30 +311,47 @@ class ImageGalleryApp(ctk.CTk):
             current_index = next((i for i, img in enumerate(self.searchList) if img[2] == self.dbPath), None)
             if current_index is not None:
                 viewer_window = ctk.CTkToplevel(self)
-                viewer_window.withdraw()  # 임시로 창 숨기기
+                viewer_window.withdraw()
                 viewer = FullscreenImageViewer(viewer_window, self.searchList, current_index)
-                viewer_window.deiconify()  # 설정 완료 후 창 표시
+                viewer_window.deiconify()
                 viewer_window.protocol("WM_DELETE_WINDOW", viewer_window.destroy)
-                viewer_window.mainloop()
+                # The viewer window has its own mainloop, so we don't call it here.
             else:
                 print("현재 이미지를 searchList에서 찾을 수 없습니다.")
         else:
             print("선택된 이미지가 없습니다.")
 
+    def _update_selection_visuals(self):
+        selected_ids = {item['id'] for item in self.selected_items}
+        for item in self.displayed_widgets:
+            if item['id'] in selected_ids:
+                item['widget'].configure(fg_color="blue")
+            else:
+                item['widget'].configure(fg_color="transparent")
+
     def display_images(self, image_paths):
         for widget in self.img_area.winfo_children():
             widget.destroy()
         self.image_references['thumbnails'] = []
-        for i, img_path in enumerate(image_paths):
-            img = Image.open(img_path[2])
+        self.displayed_widgets = []
+        for i, img_data in enumerate(image_paths):
+            db_id, tags, path, *_ = img_data
+            
+            img = Image.open(path)
             img = img.resize((150, 150), Image.LANCZOS)
-            img = ctk.CTkImage(light_image=img, size=(150, 150))
-            self.image_references['thumbnails'].append(img)
-            label = ctk.CTkLabel(self.img_area, image=img, text="")
-            label.image = img
+            img_ctk = ctk.CTkImage(light_image=img, size=(150, 150))
+            self.image_references['thumbnails'].append(img_ctk)
+            
+            label = ctk.CTkLabel(self.img_area, image=img_ctk, text="")
+            label.image = img_ctk
             label.grid(row=i // 5, column=i % 5, padx=1, pady=1)
-            label.bind("<Double-Button-1>", lambda event, path=img_path[2]: self.open_external_program(path))
-            label.bind("<Button-1>", lambda event, dbno=img_path[0], path=img_path[2], tags=img_path[1]: self.on_image_click(event, dbno, path, tags))
+            
+            label.bind("<Double-Button-1>", lambda event, p=path: self.open_external_program(p))
+            label.bind("<Button-1>", lambda event, id=db_id, p=path, t=tags: self.on_image_click(event, id, p, t))
+            
+            self.displayed_widgets.append({'id': db_id, 'widget': label})
+
+        self._update_selection_visuals()
 
     def open_external_program(self, img_path):
         os.startfile(img_path)

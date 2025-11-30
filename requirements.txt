@@ -4,3 +4,4 @@ Pillow
 aiofiles
 python-multipart
 pydantic
+send2trash

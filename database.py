@@ -142,6 +142,39 @@ def get_image_by_id(image_id):
     image_dict['metadata'] = json.loads(image_dict['metadata'])
     return image_dict
 
+def delete_images_by_ids(image_ids: list[int]) -> list[str]:
+    """
+    주어진 이미지 ID 목록에 해당하는 이미지들을 데이터베이스에서 삭제하고,
+    삭제된 이미지들의 파일 경로 목록을 반환합니다.
+    """
+    conn = get_db_connection()
+    filepaths_to_delete = []
+    try:
+        cursor = conn.cursor()
+        
+        # 삭제할 파일 경로들을 미리 조회합니다.
+        # SQLite는 튜플 리스트를 IN 절에 직접 사용할 수 없으므로, 플레이스홀더를 사용합니다.
+        placeholders = ','.join(['?' for _ in image_ids])
+        select_sql = f"SELECT filepath FROM NAIimgInfo WHERE no IN ({placeholders})"
+        file_records = cursor.execute(select_sql, image_ids).fetchall()
+        
+        for record in file_records:
+            filepaths_to_delete.append(record['filepath'])
+            
+        # 이미지 레코드들을 삭제합니다.
+        delete_sql = f"DELETE FROM NAIimgInfo WHERE no IN ({placeholders})"
+        cursor.execute(delete_sql, image_ids)
+        
+        conn.commit()
+        print(f"데이터베이스에서 {len(filepaths_to_delete)}개의 이미지 레코드를 삭제했습니다.")
+        return filepaths_to_delete
+    except sqlite3.Error as e:
+        conn.rollback()
+        print(f"데이터베이스 오류로 이미지 삭제에 실패했습니다: {e}")
+        raise
+    finally:
+        conn.close()
+
 if __name__ == '__main__':
     print("Initializing database...")
     init_db()

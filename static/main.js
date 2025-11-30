@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('searchInput');
     const sortSelect = document.getElementById('sortSelect');
     const platformSelect = document.getElementById('platformSelect');
+    const deleteModeButton = document.getElementById('deleteModeButton'); // 새로운 버튼
 
     let currentPage = 1;
     let currentQuery = '';
@@ -21,6 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentPlatformFilter = 'all';
     let isLoading = false;
     let hasMore = true;
+
+    // --- 삭제 모드 관련 전역 변수 ---
+    let isSelectionMode = false;
+    let selectedImageIds = new Set(); // Set을 사용하여 중복 방지 및 빠른 검색
+    // ----------------------------
 
     // --- Core Functions ---
 
@@ -65,10 +71,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="card bg-secondary gallery-item" data-image-id="${image.no}">
                     <img src="${image.filepath}" class="card-img-top" alt="Image ${image.no}" loading="lazy">
                     <div class="platform-overlay">${image.platform}</div>
+                    <div class="selection-overlay"></div> <!-- 선택 표시 오버레이 -->
                 </div>
             `;
             gallery.appendChild(col);
         });
+        updateGalleryVisuals(); // 갤러리 로드 후 시각적 상태 업데이트
     };
     
     const renderMetadata = (metadata) => {
@@ -87,13 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
             parsedMeta.prompt = negPromptIndex > -1 ? promptStr.substring(0, negPromptIndex).trim() : promptStr;
             
             if (negPromptIndex > -1) {
-                const negPromptStr = stepsIndex > -1 ? promptStr.substring(negPromptIndex, stepsIndex) : promptStr.substring(negPromptIndex);
+                const negPromptStr = stepsIndex > -1 ? promptStr.substring(negPromptIndex, stepsIndex) : promptStr;
                 parsedMeta['Negative prompt'] = negPromptStr.replace('Negative prompt:', '').trim();
             }
 
             if (stepsIndex > -1) {
                 const settingsStr = promptStr.substring(stepsIndex);
-                const settingsArray = settingsStr.split(/,(?=(?:[^\"]*"[^\"]*")*[^\"]*$)/g);
+                const settingsArray = settingsStr.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/g);
                 settingsArray.forEach(setting => {
                     const parts = setting.split(':');
                     const key = parts[0].trim();
@@ -181,6 +189,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- 갤러리 시각적 상태 업데이트 함수 ---
+    const updateGalleryVisuals = () => {
+        console.log('updateGalleryVisuals called. isSelectionMode:', isSelectionMode, 'selectedImageIds.size:', selectedImageIds.size);
+        document.querySelectorAll('.gallery-item').forEach(card => {
+            const imageId = parseInt(card.dataset.imageId);
+            if (isSelectionMode && selectedImageIds.has(imageId)) {
+                card.classList.add('selected-for-deletion');
+            } else {
+                card.classList.remove('selected-for-deletion');
+            }
+        });
+
+        // deleteModeButton 텍스트 업데이트
+        if (isSelectionMode) {
+            deleteModeButton.textContent = `Delete (${selectedImageIds.size})`;
+            if (selectedImageIds.size > 0) {
+                deleteModeButton.classList.remove('btn-danger');
+                deleteModeButton.classList.add('btn-warning');
+            } else {
+                deleteModeButton.classList.remove('btn-warning');
+                deleteModeButton.classList.add('btn-danger');
+            }
+        } else {
+            deleteModeButton.textContent = 'Delete';
+            deleteModeButton.classList.remove('btn-warning');
+            deleteModeButton.classList.add('btn-danger');
+        }
+    };
+
+    // --- 삭제 실행 함수 ---
+    const executeDeletion = async () => {
+        if (selectedImageIds.size === 0) {
+            alert('삭제할 이미지를 선택하세요.');
+            return;
+        }
+
+        if (!confirm(`${selectedImageIds.size}개의 이미지를 휴지통으로 이동하시겠습니까?`)) {
+            return;
+        }
+
+        try {
+            const response = await axios.delete('/api/images/batch', {
+                data: { image_ids: Array.from(selectedImageIds) }
+            });
+            alert(response.data.message);
+            
+            // 삭제 후 갤러리 새로고침 및 선택 모드 종료
+            selectedImageIds.clear();
+            isSelectionMode = false;
+            handleSearch(); // 전체 갤러리 새로고침
+            updateGalleryVisuals(); // 버튼 텍스트 초기화 등
+        } catch (error) {
+            console.error('Failed to delete images:', error);
+            alert(`이미지 삭제 실패: ${error.response.data.detail || error.message}`);
+        }
+    };
+
 
     // --- Event Handlers ---
 
@@ -243,9 +308,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
     gallery.addEventListener('click', (e) => {
         const card = e.target.closest('.gallery-item');
-        if (card) {
-            const imageId = card.dataset.imageId;
+        if (!card) return;
+
+        const imageId = parseInt(card.dataset.imageId);
+
+        if (isSelectionMode) {
+            // 선택 모드에서는 이미지 선택/해제
+            e.preventDefault();
+            e.stopPropagation(); // 상세 모달 열림 방지
+            console.log('Selection mode: Toggling imageId', imageId);
+            if (selectedImageIds.has(imageId)) {
+                selectedImageIds.delete(imageId);
+            } else {
+                selectedImageIds.add(imageId);
+            }
+            updateGalleryVisuals(); // 시각적 상태 업데이트
+        } else {
+            // 일반 모드에서는 상세 이미지 보기
+            console.log('Normal mode: Fetching details for imageId', imageId);
             fetchImageDetails(imageId);
+        }
+    });
+
+    // --- deleteModeButton 클릭 이벤트 핸들러 ---
+    deleteModeButton.addEventListener('click', () => {
+        console.log('Delete button clicked. Current isSelectionMode:', isSelectionMode);
+        if (isSelectionMode) {
+            // 삭제 실행 모드에서 버튼 클릭 시 삭제 수행
+            if (selectedImageIds.size === 0) {
+                // 선택된 이미지가 없으면 삭제 모드 취소
+                isSelectionMode = false;
+                selectedImageIds.clear();
+                updateGalleryVisuals();
+                alert('선택된 이미지가 없으므로 삭제 모드를 취소합니다.');
+            } else {
+                executeDeletion();
+            }
+        } else {
+            // 일반 모드에서 버튼 클릭 시 선택 모드 진입
+            isSelectionMode = true;
+            selectedImageIds.clear(); // 기존 선택 초기화
+            updateGalleryVisuals();
         }
     });
 
