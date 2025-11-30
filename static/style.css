@@ -1,0 +1,63 @@
+#image-gallery .gallery-item {
+    transition: transform 0.2s ease-in-out;
+    cursor: pointer;
+}
+
+#image-gallery .gallery-item:hover {
+    transform: scale(1.05);
+    z-index: 10;
+}
+
+#image-gallery .gallery-item .card-img-top {
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    background-color: #333;
+}
+
+#metadata-container textarea[readonly] {
+    border: none;
+    box-shadow: none;
+    background-color: #272B30 !important; /* Slightly different from the div background for distinction */
+    padding-right: 60px; /* Make space for the copy button */
+}
+
+.copy-btn {
+    position: absolute;
+    top: 35px;
+    right: 10px;
+    z-index: 10;
+}
+
+.gallery-item {
+    position: relative; /* 자식 요소의 absolute 위치 기준점 */
+}
+
+.platform-overlay {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    z-index: 1;
+}
+
+.short-item {
+    border: 1px solid #444;
+    border-radius: 0.25rem;
+    flex-grow: 1;
+    position: relative; /* 자식 요소의 absolute 위치 기준점 */
+    padding-right: 70px; /* 복사 버튼 공간 확보 */
+}
+
+.short-item-copy-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    z-index: 2;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.7rem;
+}
