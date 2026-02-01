@@ -133,10 +133,15 @@ def start_scan(background_tasks: BackgroundTasks):
     return {"message": "Image scan started in the background."}
 
 @app.get("/api/images")
-def get_all_images(page: int = 1, limit: int = 50, query: Optional[str] = None, sort_by: str = "random", platform_filter: str = "all"):
+def get_all_images(page: int = 1, limit: int = 50, query: Optional[str] = None, sort_by: str = "random", platform_filter: str = "all", seed: Optional[str] = None, video_only: bool = False):
     """Retrieves a paginated list of images, with optional search, sorting and platform filtering."""
     try:
-        result = database.get_images(page, limit, query, sort_by, platform_filter)
+        # seed가 문자열로 오거나 null일 수 있으므로 정수로 변환 시도
+        parsed_seed = None
+        if seed and seed.isdigit():
+            parsed_seed = int(seed)
+        
+        result = database.get_images(page, limit, query, sort_by, platform_filter, parsed_seed, video_only)
         config = get_config(mount_images=False)
         if config:
             base_path = config["des_file_path"]

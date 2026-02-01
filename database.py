@@ -1,5 +1,6 @@
 import sqlite3
 import json
+from typing import Optional
 
 DB_FILE = "image_gallery.db"
 
@@ -50,6 +51,15 @@ def get_db_connection():
     """데이터베이스 연결을 생성하고 반환합니다."""
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
+    
+    # 시드 기반 랜덤 정렬을 위한 사용자 정의 함수 등록
+    def seeded_random(id_val, seed):
+        import hashlib
+        # ID와 시드를 조합하여 해시 생성 후 정수로 변환하여 반환
+        hash_input = f"{id_val}:{seed}".encode()
+        return hashlib.md5(hash_input).hexdigest()
+    
+    conn.create_function("seeded_random", 2, seeded_random)
     return conn
 
 def add_image_info(image_data):
@@ -68,7 +78,7 @@ def add_image_info(image_data):
     finally:
         conn.close()
 
-def get_images(page = 1, limit = 50, query = None, sort_by: str = "random", platform_filter: str = "all"):
+def get_images(page = 1, limit = 50, query = None, sort_by: str = "random", platform_filter: str = "all", seed: Optional[int] = None, video_only: bool = False):
     """
     이미지 목록을 페이지네이션하여 반환합니다. 태그 검색, 정렬 및 플랫폼 필터링을 지원합니다.
     """
@@ -95,6 +105,9 @@ def get_images(page = 1, limit = 50, query = None, sort_by: str = "random", plat
             params.append(platform_filter)
             count_params.append(platform_filter)
 
+    if video_only:
+        where_clauses.append("(filepath LIKE '%.mp4' OR filepath LIKE '%.webm' OR filepath LIKE '%.gif')")
+
     if where_clauses:
         sql_parts.append(" WHERE " + " AND ".join(where_clauses))
         count_sql_parts.append(" WHERE " + " AND ".join(where_clauses))
@@ -105,7 +118,11 @@ def get_images(page = 1, limit = 50, query = None, sort_by: str = "random", plat
     elif sort_by == "asc":
         sql_parts.append(" ORDER BY makeTime ASC")
     else: # "random" 또는 기본값
-        sql_parts.append(" ORDER BY RANDOM()")
+        if seed is not None:
+            sql_parts.append(" ORDER BY seeded_random(no, ?)")
+            params.append(seed)
+        else:
+            sql_parts.append(" ORDER BY RANDOM()")
 
     sql_parts.append(" LIMIT ? OFFSET ?")
     params.extend([limit, offset])

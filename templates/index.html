@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko" data-bs-theme="dark">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,13 +9,15 @@
     <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/darkly/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
+
 <body>
     <!-- Navigation Bar -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">Tag Gallery</a>
             <div class="d-flex ms-auto align-items-center">
-                <input class="form-control me-2" type="search" id="searchInput" placeholder="Search tags..." aria-label="Search">
+                <input class="form-control me-2" type="search" id="searchInput" placeholder="Search tags..."
+                    aria-label="Search">
                 <select class="form-select me-2" id="sortSelect" style="width: auto;">
                     <option value="random" selected>Random</option>
                     <option value="desc">Newest</option>
@@ -28,9 +31,14 @@
                     <option value="none">None</option>
                 </select>
                 <button class="btn btn-secondary me-2" id="searchButton">Search</button>
+                <div class="form-check form-check-inline me-2 mb-0">
+                    <input class="form-check-input" type="checkbox" id="videoOnlyCheckbox">
+                    <label class="form-check-label text-light" for="videoOnlyCheckbox">Video Only</label>
+                </div>
                 <button class="btn btn-danger me-2" id="deleteModeButton">Delete</button>
                 <button class="btn btn-info me-2" id="scanButton">Scan</button>
-                <button class="btn btn-warning" id="settingsButton" data-bs-toggle="modal" data-bs-target="#settingsModal">Settings</button>
+                <button class="btn btn-warning" id="settingsButton" data-bs-toggle="modal"
+                    data-bs-target="#settingsModal">Settings</button>
             </div>
         </div>
     </nav>
@@ -78,7 +86,8 @@
     </div>
 
     <!-- Image Detail Modal -->
-    <div class="modal fade" id="imageDetailModal" tabindex="-1" aria-labelledby="imageDetailModalLabel" aria-hidden="true">
+    <div class="modal fade" id="imageDetailModal" tabindex="-1" aria-labelledby="imageDetailModalLabel"
+        aria-hidden="true">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
@@ -88,11 +97,13 @@
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-12 text-center mb-3">
-                            <img id="detailImage" src="" class="img-fluid w-100" alt="Detailed view" style="max-height: 70vh; object-fit: contain;">
+                            <img id="detailImage" src="" class="img-fluid w-100" alt="Detailed view"
+                                style="max-height: 70vh; object-fit: contain;">
                         </div>
                         <div class="col-12">
                             <h6>Metadata</h6>
-                            <div id="metadata-container" class="p-2 rounded" style="max-height: 40vh; overflow-y: auto;">
+                            <div id="metadata-container" class="p-2 rounded"
+                                style="max-height: 40vh; overflow-y: auto;">
                                 <!-- Metadata will be loaded here -->
                             </div>
                         </div>
@@ -106,4 +117,5 @@
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <script src="/static/main.js"></script>
 </body>
+
 </html>

@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentQuery = '';
     let currentSort = 'random';
     let currentPlatformFilter = 'all';
+    let currentVideoOnly = false;
+    let currentSeed = null;
     let isLoading = false;
     let hasMore = true;
 
@@ -30,14 +32,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Core Functions ---
 
-    const fetchImages = async (page = 1, query = '', sort_by = 'random', platform_filter = 'all') => {
+    const fetchImages = async (page = 1, query = '', sort_by = 'random', platform_filter = 'all', seed = null, video_only = false) => {
         if (isLoading || (page > 1 && !hasMore)) return;
 
         isLoading = true;
         loadingIndicator.style.display = 'block';
 
         try {
-            const response = await axios.get(`/api/images?page=${page}&limit=30&query=${query}&sort_by=${sort_by}&platform_filter=${platform_filter}`);
+            let url = `/api/images?page=${page}&limit=30&query=${query}&sort_by=${sort_by}&platform_filter=${platform_filter}&video_only=${video_only}`;
+            if (seed !== null) {
+                url += `&seed=${seed}`;
+            }
+            const response = await axios.get(url);
             const data = response.data;
 
             if (page === 1) {
@@ -343,14 +349,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const query = searchInput.value;
         const sort_by = sortSelect.value;
         const platform_filter = platformSelect.value;
+        const video_only = document.getElementById('videoOnlyCheckbox').checked;
 
         currentQuery = query;
         currentSort = sort_by;
         currentPlatformFilter = platform_filter;
+        currentVideoOnly = video_only;
+
+        // 정렬이 random일 때만 새로운 시드 생성
+        if (sort_by === 'random') {
+            currentSeed = Math.floor(Math.random() * 1000000);
+        } else {
+            currentSeed = null;
+        }
+
         currentPage = 1;
         hasMore = true;
         gallery.innerHTML = '';
-        fetchImages(currentPage, currentQuery, currentSort, currentPlatformFilter);
+        fetchImages(currentPage, currentQuery, currentSort, currentPlatformFilter, currentSeed, currentVideoOnly);
     };
 
     document.getElementById('searchButton').addEventListener('click', handleSearch);
@@ -366,10 +382,12 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('scroll', () => {
         if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
             if (hasMore && !isLoading) {
-                fetchImages(currentPage + 1, currentQuery, currentSort, currentPlatformFilter);
+                fetchImages(currentPage + 1, currentQuery, currentSort, currentPlatformFilter, currentSeed, currentVideoOnly);
             }
         }
     });
+
+    document.getElementById('videoOnlyCheckbox').addEventListener('change', handleSearch);
 
     gallery.addEventListener('click', (e) => {
         const card = e.target.closest('.gallery-item');
