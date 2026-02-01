@@ -8,6 +8,7 @@ import cv2
 from mutagen.mp4 import MP4
 import mutagen
 import logging
+import send2trash
 
 logger = logging.getLogger("uvicorn")
 
@@ -385,3 +386,23 @@ def process_image(file_path, dest_root_path):
         print(f"Error processing file {file_path}: {e}", flush=True)
         traceback.print_exc()
         return None
+
+def remove_empty_folders(folder_path):
+    """
+    지정된 폴더 내의 비어있는 하위 폴더들을 재귀적으로 탐색하여 휴지통으로 삭제합니다.
+    bottom-up 방식을 사용하여 하위 폴더가 삭제된 후 비게 되는 상위 폴더도 삭제할 수 있습니다.
+    """
+    logger.info(f"Checking for empty folders in: {folder_path}")
+    if not os.path.exists(folder_path):
+        return
+
+    for root, dirs, files in os.walk(folder_path, topdown=False):
+        for dir_name in dirs:
+            dir_path = os.path.join(root, dir_name)
+            try:
+                # 폴더가 비어있는지 확인 (os.listdir가 비어있으면)
+                if not os.listdir(dir_path):
+                    logger.info(f"Removing empty folder to trash: {dir_path}")
+                    send2trash.send2trash(dir_path)
+            except Exception as e:
+                logger.error(f"Error removing folder {dir_path}: {e}")

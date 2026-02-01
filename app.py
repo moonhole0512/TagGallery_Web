@@ -81,6 +81,12 @@ def scan_and_process_images(source_path: str, dest_path: str):
         except Exception as e:
             logger.error(f"Failed to process {file}: {e}")
     logger.info(f"Background scan finished. Processed {processed_count} files.")
+    
+    # 비어있는 폴더 정리
+    try:
+        image_processing.remove_empty_folders(source_path)
+    except Exception as e:
+        logger.error(f"Failed to cleanup empty folders: {e}")
 
 # --- API Endpoints ---
 @app.on_event("startup")
