@@ -15,16 +15,11 @@ import database
 import image_processing
 
 import logging
-import sys
+
+# --- Use Uvicorn's Standard Logger ---
+logger = logging.getLogger("uvicorn")
 
 CONFIG_FILE = "config.json"
-
-# Configure Logging with explicit StreamHandler for Uvicorn visibility
-logger = logging.getLogger("tag_gallery")
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler(sys.stderr)
-handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(handler)
 
 app = FastAPI()
 
@@ -69,7 +64,7 @@ def save_config(config: AppConfig):
 def scan_and_process_images(source_path: str, dest_path: str):
     """Scans the source path for images and processes them in the background."""
     database.create_table_if_not_exists() # Ensure table exists for the background process
-    print(f"Starting scan in background: {source_path}", flush=True)
+    logger.info(f"Starting scan in background: {source_path}")
     extensions = ['*.png', '*.jpg', '*.jpeg', '*.webp', '*.mp4', '*.webm', '*.gif']
     files = []
     for ext in extensions:
@@ -82,10 +77,10 @@ def scan_and_process_images(source_path: str, dest_path: str):
             if image_data:
                 database.add_image_info(image_data)
                 processed_count += 1
-                print(f"Processed: {file}", flush=True)
+                logger.info(f"Processed: {file}")
         except Exception as e:
-            print(f"Failed to process {file}: {e}", flush=True)
-    print(f"Background scan finished. Processed {processed_count} files.", flush=True)
+            logger.error(f"Failed to process {file}: {e}")
+    logger.info(f"Background scan finished. Processed {processed_count} files.")
 
 # --- API Endpoints ---
 @app.on_event("startup")
@@ -133,7 +128,7 @@ def start_scan(background_tasks: BackgroundTasks):
     source_path = config["image_file_path"]
     dest_path = config["des_file_path"]
     
-    print(f"Scan request received from frontend. Source: {source_path}", flush=True)
+    logger.info(f"Scan request received from frontend. Source: {source_path}")
     background_tasks.add_task(scan_and_process_images, source_path, dest_path)
     return {"message": "Image scan started in the background."}
 
@@ -177,23 +172,26 @@ def get_single_image(image_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to retrieve image details: {e}")
 
 @app.delete("/api/images/batch")
-async def delete_images_batch(request: DeleteRequest):
+def delete_images_batch(request: DeleteRequest):
     try:
+        logger.info(f"삭제 요청 수신: {len(request.image_ids)}개의 ID")
         filepaths = database.delete_images_by_ids(request.image_ids)
+        logger.info(f"DB에서 조회된 파일 경로 수: {len(filepaths)}개")
         deleted_count = 0
         for filepath in filepaths:
             if os.path.exists(filepath):
                 send2trash.send2trash(filepath)
                 deleted_count += 1
-                print(f"파일을 휴지통으로 이동했습니다: {filepath}", flush=True)
+                logger.info(f"파일을 휴지통으로 이동했습니다: {filepath}")
                 
                 # 비디오 썸네일도 삭제
                 thumb_path = filepath + ".thumb.jpg"
                 if os.path.exists(thumb_path):
                     send2trash.send2trash(thumb_path)
-                    print(f"동영상 썸네일을 휴지통으로 이동했습니다: {thumb_path}", flush=True)
+                    logger.info(f"동영상 썸네일을 휴지통으로 이동했습니다: {thumb_path}")
             else:
-                print(f"경고: 파일을 찾을 수 없어 휴지통으로 이동하지 못했습니다: {filepath}", flush=True)
+                logger.warning(f"경고: 파일을 찾을 수 없어 휴지통으로 이동하지 못했습니다: {filepath}")
         return {"message": f"{len(request.image_ids)}개의 레코드를 데이터베이스에서 삭제하고, {deleted_count}개의 파일을 휴지통으로 이동했습니다."}
     except Exception as e:
+        logger.error(f"이미지 삭제 실패: {e}")
         raise HTTPException(status_code=500, detail=f"이미지 삭제 실패: {e}")

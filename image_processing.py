@@ -9,7 +9,7 @@ from mutagen.mp4 import MP4
 import mutagen
 import logging
 
-logger = logging.getLogger("tag_gallery")
+logger = logging.getLogger("uvicorn")
 
 def read_info_from_image_stealth(image):
     # if tensor, convert to PIL image
