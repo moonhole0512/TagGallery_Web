@@ -17,7 +17,7 @@ def create_table_if_not_exists():
                            metadata TEXT)''')
         conn.commit()
     except sqlite3.Error as e:
-        print(f"Database error while ensuring table exists: {e}")
+        print(f"Database error while ensuring table exists: {e}", flush=True)
     finally:
         if conn:
             conn.close()
@@ -41,7 +41,7 @@ def init_db():
         conn.commit()
         print("Database initialized successfully with the new schema.")
     except sqlite3.Error as e:
-        print(f"Database error: {e}")
+        print(f"Database error: {e}", flush=True)
     finally:
         if 'conn' in locals() and conn:
             conn.close()
@@ -166,11 +166,11 @@ def delete_images_by_ids(image_ids: list[int]) -> list[str]:
         cursor.execute(delete_sql, image_ids)
         
         conn.commit()
-        print(f"데이터베이스에서 {len(filepaths_to_delete)}개의 이미지 레코드를 삭제했습니다.")
+        print(f"데이터베이스에서 {len(filepaths_to_delete)}개의 이미지 레코드를 삭제했습니다.", flush=True)
         return filepaths_to_delete
     except sqlite3.Error as e:
         conn.rollback()
-        print(f"데이터베이스 오류로 이미지 삭제에 실패했습니다: {e}")
+        print(f"데이터베이스 오류로 이미지 삭제에 실패했습니다: {e}", flush=True)
         raise
     finally:
         conn.close()

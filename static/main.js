@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const settingsModal = new bootstrap.Modal(document.getElementById('settingsModal'));
     const imageDetailModal = new bootstrap.Modal(document.getElementById('imageDetailModal'));
-    
+
     document.getElementById('imageDetailModal').addEventListener('shown.bs.modal', () => {
         const metadataContainer = document.getElementById('metadata-container');
         if (metadataContainer) {
@@ -67,10 +67,18 @@ document.addEventListener('DOMContentLoaded', () => {
         images.forEach(image => {
             const col = document.createElement('div');
             col.className = 'col-6 col-sm-4 col-md-3 col-lg-2';
+
+            const isVideo = image.filepath.toLowerCase().endsWith('.mp4') ||
+                image.filepath.toLowerCase().endsWith('.webm') ||
+                image.filepath.toLowerCase().endsWith('.gif');
+
+            const thumbUrl = isVideo ? image.filepath + ".thumb.jpg" : image.filepath;
+
             col.innerHTML = `
                 <div class="card bg-secondary gallery-item" data-image-id="${image.no}">
-                    <img src="${image.filepath}" class="card-img-top" alt="Image ${image.no}" loading="lazy">
+                    <img src="${thumbUrl}" class="card-img-top" alt="Image ${image.no}" loading="lazy" onerror="this.src='${image.filepath}'; this.onerror=null;">
                     <div class="platform-overlay">${image.platform}</div>
+                    ${isVideo ? '<div class="video-overlay">VIDEO</div>' : ''}
                     <div class="selection-overlay"></div> <!-- 선택 표시 오버레이 -->
                 </div>
             `;
@@ -78,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         updateGalleryVisuals(); // 갤러리 로드 후 시각적 상태 업데이트
     };
-    
+
     const renderMetadata = (metadata) => {
         const mainContainer = document.createElement('div');
         const longItemsContainer = document.createElement('div');
@@ -93,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const stepsIndex = promptStr.indexOf('Steps:');
 
             parsedMeta.prompt = negPromptIndex > -1 ? promptStr.substring(0, negPromptIndex).trim() : promptStr;
-            
+
             if (negPromptIndex > -1) {
                 const negPromptStr = stepsIndex > -1 ? promptStr.substring(negPromptIndex, stepsIndex) : promptStr;
                 parsedMeta['Negative prompt'] = negPromptStr.replace('Negative prompt:', '').trim();
@@ -111,6 +119,36 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             }
+        } else if (metadata.Software === 'ComfyUI') {
+            // ComfyUI metadata handling
+            if (metadata.prompt) {
+                // Try to find positive/negative prompts from ComfyUI nodes
+                // Often in CLIPTextEncode nodes
+                let positivePrompts = [];
+                let negativePrompts = [];
+
+                for (let nodeId in metadata.prompt) {
+                    const node = metadata.prompt[nodeId];
+                    if (node.class_type === 'CLIPTextEncode' || node.class_type === 'CLIPTextEncodeSDXL') {
+                        const text = node.inputs.text || node.inputs.text_g || "";
+                        if (text.toLowerCase().includes('negative') || text.toLowerCase().includes('low quality') || text.toLowerCase().includes('bad anatomy')) {
+                            negativePrompts.push(text);
+                        } else {
+                            positivePrompts.push(text);
+                        }
+                    }
+                }
+
+                if (positivePrompts.length > 0) parsedMeta.prompt = positivePrompts.join('\n---\n');
+                if (negativePrompts.length > 0) parsedMeta['Negative prompt'] = negativePrompts.join('\n---\n');
+
+                parsedMeta['Full Workflow (JSON)'] = JSON.stringify(metadata.prompt, null, 2);
+                if (metadata.workflow) {
+                    parsedMeta['Visual Workflow (JSON)'] = JSON.stringify(metadata.workflow, null, 2);
+                }
+            } else {
+                parsedMeta = metadata;
+            }
         } else {
             parsedMeta = metadata;
         }
@@ -125,12 +163,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (longItemKeys.includes(key.toLowerCase()) || String(value).length > 80) {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'mb-3 position-relative';
-                
+
                 const label = document.createElement('label');
                 label.className = 'form-label fw-bold';
                 label.textContent = key;
                 itemDiv.appendChild(label);
-                
+
                 const textarea = document.createElement('textarea');
                 textarea.className = 'form-control bg-dark text-light';
                 textarea.textContent = value;
@@ -158,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 shortItemsContainer.appendChild(shortItemDiv);
             }
         }
-        
+
         mainContainer.appendChild(longItemsContainer);
         if (shortItemsContainer.hasChildNodes()) {
             const separator = document.createElement('hr');
@@ -177,12 +215,39 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await axios.get(`/api/images/${id}`);
             const image = response.data;
-            document.getElementById('detailImage').src = image.filepath;
-            
+
+            const detailContainer = document.querySelector('#imageDetailModal .col-12.text-center.mb-3');
+            const isVideo = image.filepath.toLowerCase().endsWith('.mp4') ||
+                image.filepath.toLowerCase().endsWith('.webm') ||
+                image.filepath.toLowerCase().endsWith('.gif');
+
+            detailContainer.innerHTML = '';
+            if (isVideo) {
+                const video = document.createElement('video');
+                video.id = 'detailVideo';
+                video.src = image.filepath;
+                video.className = 'img-fluid w-100';
+                video.controls = true;
+                video.autoplay = true;
+                video.loop = true;
+                video.style.maxHeight = '70vh';
+                video.style.objectFit = 'contain';
+                detailContainer.appendChild(video);
+            } else {
+                const img = document.createElement('img');
+                img.id = 'detailImage';
+                img.src = image.filepath;
+                img.className = 'img-fluid w-100';
+                img.alt = 'Detailed view';
+                img.style.maxHeight = '70vh';
+                img.style.objectFit = 'contain';
+                detailContainer.appendChild(img);
+            }
+
             const metadataContainer = document.getElementById('metadata-container');
             metadataContainer.innerHTML = ''; // Clear previous content
             metadataContainer.appendChild(renderMetadata(image.metadata));
-            
+
             imageDetailModal.show();
         } catch (error) {
             console.error('Failed to fetch image details:', error);
@@ -234,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 data: { image_ids: Array.from(selectedImageIds) }
             });
             alert(response.data.message);
-            
+
             // 삭제 후 갤러리 새로고침 및 선택 모드 종료
             selectedImageIds.clear();
             isSelectionMode = false;
@@ -278,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const query = searchInput.value;
         const sort_by = sortSelect.value;
         const platform_filter = platformSelect.value;
-        
+
         currentQuery = query;
         currentSort = sort_by;
         currentPlatformFilter = platform_filter;

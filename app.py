@@ -1,6 +1,7 @@
 import json
 import os
 import glob
+import logging
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -13,7 +14,17 @@ import send2trash
 import database
 import image_processing
 
+import logging
+import sys
+
 CONFIG_FILE = "config.json"
+
+# Configure Logging with explicit StreamHandler for Uvicorn visibility
+logger = logging.getLogger("tag_gallery")
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler(sys.stderr)
+handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(handler)
 
 app = FastAPI()
 
@@ -58,25 +69,33 @@ def save_config(config: AppConfig):
 def scan_and_process_images(source_path: str, dest_path: str):
     """Scans the source path for images and processes them in the background."""
     database.create_table_if_not_exists() # Ensure table exists for the background process
-    print(f"Starting scan in background: {source_path}")
-    png_files = glob.glob(os.path.join(source_path, '**', '*.png'), recursive=True)
+    print(f"Starting scan in background: {source_path}", flush=True)
+    extensions = ['*.png', '*.jpg', '*.jpeg', '*.webp', '*.mp4', '*.webm', '*.gif']
+    files = []
+    for ext in extensions:
+        files.extend(glob.glob(os.path.join(source_path, '**', ext), recursive=True))
+    
     processed_count = 0
-    for png_file in png_files:
+    for file in files:
         try:
-            image_data = image_processing.process_image(png_file, dest_path)
+            image_data = image_processing.process_image(file, dest_path)
             if image_data:
                 database.add_image_info(image_data)
                 processed_count += 1
-                print(f"Processed: {png_file}")
+                print(f"Processed: {file}", flush=True)
         except Exception as e:
-            print(f"Failed to process {png_file}: {e}")
-    print(f"Background scan finished. Processed {processed_count} images.")
+            print(f"Failed to process {file}: {e}", flush=True)
+    print(f"Background scan finished. Processed {processed_count} files.", flush=True)
 
 # --- API Endpoints ---
 @app.on_event("startup")
 def startup_event():
     """On startup, initialize DB and load config."""
-    # database.init_db() # This will wipe the DB on every restart. Better to do it manually.
+    print("\n" + "="*50, flush=True)
+    print("  TAG GALLERY SERVER STARTED", flush=True)
+    print("  LOGGING IS ACTIVE", flush=True)
+    print("="*50 + "\n", flush=True)
+    print("Startup event triggered.", flush=True)
     get_config(mount_images=True)
 
 @app.get("/")
@@ -114,6 +133,7 @@ def start_scan(background_tasks: BackgroundTasks):
     source_path = config["image_file_path"]
     dest_path = config["des_file_path"]
     
+    print(f"Scan request received from frontend. Source: {source_path}", flush=True)
     background_tasks.add_task(scan_and_process_images, source_path, dest_path)
     return {"message": "Image scan started in the background."}
 
@@ -165,9 +185,15 @@ async def delete_images_batch(request: DeleteRequest):
             if os.path.exists(filepath):
                 send2trash.send2trash(filepath)
                 deleted_count += 1
-                print(f"파일을 휴지통으로 이동했습니다: {filepath}")
+                print(f"파일을 휴지통으로 이동했습니다: {filepath}", flush=True)
+                
+                # 비디오 썸네일도 삭제
+                thumb_path = filepath + ".thumb.jpg"
+                if os.path.exists(thumb_path):
+                    send2trash.send2trash(thumb_path)
+                    print(f"동영상 썸네일을 휴지통으로 이동했습니다: {thumb_path}", flush=True)
             else:
-                print(f"경고: 파일을 찾을 수 없어 휴지통으로 이동하지 못했습니다: {filepath}")
+                print(f"경고: 파일을 찾을 수 없어 휴지통으로 이동하지 못했습니다: {filepath}", flush=True)
         return {"message": f"{len(request.image_ids)}개의 레코드를 데이터베이스에서 삭제하고, {deleted_count}개의 파일을 휴지통으로 이동했습니다."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"이미지 삭제 실패: {e}")
