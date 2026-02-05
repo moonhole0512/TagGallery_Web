@@ -459,8 +459,10 @@ document.addEventListener('DOMContentLoaded', () => {
     platformSelect.addEventListener('change', handleSearch);
 
     window.addEventListener('scroll', () => {
-        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+        // 하단부 도달 전 미리 다음 로딩 (800px 여유)
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
             if (hasMore && !isLoading) {
+                console.log('Proactive loading triggered');
                 fetchImages(currentPage + 1, currentQuery, currentSort, currentPlatformFilter, currentSeed, currentVideoOnly);
             }
         }
