@@ -1,97 +1,318 @@
+/* Stable Masonry Layout (JS Managed) */
+#image-gallery {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 20px 0;
+    width: 100%;
+}
+
+.gallery-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+#image-gallery .gallery-item-wrapper {
+    width: 100%;
+}
+
 #image-gallery .gallery-item {
-    transition: transform 0.2s ease-in-out;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
     cursor: pointer;
-    position: relative; /* 자식 요소의 absolute 위치 기준점 */
+    position: relative;
+    border: none;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    background-color: #2c3e50;
 }
 
 #image-gallery .gallery-item:hover {
-    transform: scale(1.05);
+    transform: translateY(-5px) scale(1.02);
     z-index: 10;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
 }
 
 #image-gallery .gallery-item .card-img-top {
-    aspect-ratio: 1 / 1;
-    object-fit: cover;
-    background-color: #333;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    background-color: #1a1a1a;
+    display: block;
 }
 
-/* 선택 오버레이 스타일 */
-.selection-overlay {
+/* Responsive Column Count */
+@media (max-width: 1400px) {
+    #image-gallery {
+        column-count: 5;
+    }
+}
+
+@media (max-width: 1100px) {
+    #image-gallery {
+        column-count: 4;
+    }
+}
+
+@media (max-width: 850px) {
+    #image-gallery {
+        column-count: 3;
+    }
+}
+
+@media (max-width: 600px) {
+    #image-gallery {
+        column-count: 2;
+    }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+/* Glassmorphism Navbar */
+.custom-navbar {
+    background: rgba(20, 20, 20, 0.9) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+    z-index: 1050;
+    /* Ensure it stays above everything */
+}
+
+.navbar-brand {
+    letter-spacing: -0.5px;
+}
+
+.search-group {
+    max-width: 500px;
+}
+
+.no-wrap {
+    white-space: nowrap;
+}
+
+.form-select,
+.form-control {
+    background-color: rgba(40, 40, 40, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+/* 드롭다운 옵션 가독성 해결 (강제 적용) */
+.form-select option {
+    background-color: #2c2c2c !important;
+    color: #ffffff !important;
+}
+
+.form-select:focus,
+.form-control:focus {
+    background-color: rgba(60, 60, 60, 1);
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    color: #fff;
+}
+
+/* 삭제 버튼 시인성 개선 */
+#deleteModeButton {
+    background-color: rgba(220, 53, 69, 0.1);
+    border-color: #ff4d4d !important;
+    color: #ff4d4d !important;
+    font-weight: 700;
+}
+
+#deleteModeButton:hover {
+    background-color: #ff4d4d !important;
+    color: #fff !important;
+}
+
+#deleteModeButton.btn-warning {
+    color: #000 !important;
+    background-color: #ffc107 !important;
+    border-color: #ffc107 !important;
+}
+
+/* 갤러리 아이템 추가 스타일 */
+#image-gallery .gallery-item .selection-overlay {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(108, 117, 125, 0.5); /* 반투명 회색 */
-    display: none; /* 기본적으로 숨김 */
-    border-radius: var(--bs-card-border-radius); /* 카드 모서리 반경과 일치 */
+    background: rgba(13, 110, 253, 0.4);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
 }
 
-/* 선택된 이미지에 오버레이 표시 */
+#image-gallery .gallery-item .selection-overlay::after {
+    content: '✓';
+    color: white;
+    font-size: 2rem;
+    font-weight: bold;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
 #image-gallery .gallery-item.selected-for-deletion .selection-overlay {
-    display: block;
+    display: flex;
 }
 
-/* 기존 selected-for-deletion 스타일에서 시각적 효과 제거 */
 #image-gallery .gallery-item.selected-for-deletion {
-    border: none;
-    box-shadow: none;
+    transform: scale(0.95);
+    opacity: 0.8;
 }
 
+/* 메타데이터 영역 개선 */
+#metadata-container {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
 
 #metadata-container textarea[readonly] {
     border: none;
     box-shadow: none;
-    background-color: #272B30 !important; /* Slightly different from the div background for distinction */
-    padding-right: 60px; /* Make space for the copy button */
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    padding-right: 60px;
+    border-radius: 8px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.9rem;
 }
 
 .copy-btn {
     position: absolute;
     top: 35px;
-    right: 10px;
+    right: 15px;
     z-index: 10;
+    opacity: 0.7;
+}
+
+.copy-btn:hover {
+    opacity: 1;
 }
 
 .platform-overlay {
     position: absolute;
-    top: 5px;
-    right: 5px;
-    background-color: rgba(0, 0, 0, 0.7);
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
     color: white;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    z-index: 1;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    z-index: 2;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .video-overlay {
     position: absolute;
-    bottom: 5px;
-    right: 5px;
-    background-color: rgba(220, 53, 69, 0.8); /* Bootstrap danger color */
+    bottom: 8px;
+    right: 8px;
+    background: rgba(220, 53, 69, 0.9);
     color: white;
-    padding: 2px 6px;
+    padding: 2px 8px;
     border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: bold;
-    z-index: 1;
+    font-size: 0.7rem;
+    font-weight: 800;
+    z-index: 2;
 }
 
 .short-item {
-    border: 1px solid #444;
-    border-radius: 0.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
     flex-grow: 1;
-    position: relative; /* 자식 요소의 absolute 위치 기준점 */
-    padding-right: 70px; /* 복사 버튼 공간 확보 */
+    position: relative;
+    padding: 8px 12px;
+    padding-right: 70px;
+    transition: background 0.2s;
+}
+
+.short-item:hover {
+    background: rgba(255, 255, 255, 0.07);
 }
 
 .short-item-copy-btn {
     position: absolute;
-    top: 5px;
-    right: 5px;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
     z-index: 2;
-    padding: 0.1rem 0.4rem;
+    padding: 2px 8px;
     font-size: 0.7rem;
+}
+
+/* 모달 내비게이션 버튼 스타일 정교화 */
+.modal-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1000;
+    padding: 25px 15px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+    opacity: 0;
+    transition: opacity 0.3s, background 0.3s, transform 0.3s;
+}
+
+.modal-content:hover .modal-nav-btn {
+    opacity: 0.8;
+}
+
+.modal-nav-btn:hover {
+    opacity: 1 !important;
+    background: rgba(0, 0, 0, 0.8);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.prev-btn {
+    left: -70px;
+}
+
+.next-btn {
+    right: -70px;
+}
+
+@media (max-width: 1400px) {
+    .prev-btn {
+        left: 10px;
+    }
+
+    .next-btn {
+        right: 10px;
+    }
+}
+
+@media (max-width: 576px) {
+    .modal-nav-btn {
+        padding: 15px 10px;
+        top: auto;
+        bottom: 20px;
+        transform: none;
+        opacity: 0.8;
+    }
+
+    .modal-nav-btn:hover {
+        transform: scale(1.1);
+    }
+
+    .prev-btn {
+        left: 10px;
+    }
+
+    .next-btn {
+        right: 10px;
+    }
 }

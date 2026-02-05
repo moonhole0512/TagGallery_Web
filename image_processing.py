@@ -9,8 +9,22 @@ from mutagen.mp4 import MP4
 import mutagen
 import logging
 import send2trash
+import math
 
 logger = logging.getLogger("uvicorn")
+
+def sanitize_metadata(obj):
+    """
+    Recursively replaces non-JSON compliant float values (NaN, Inf) with None.
+    """
+    if isinstance(obj, dict):
+        return {k: sanitize_metadata(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_metadata(i) for i in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+    return obj
 
 def read_info_from_image_stealth(image):
     # if tensor, convert to PIL image
@@ -379,7 +393,7 @@ def process_image(file_path, dest_root_path):
             "new_path": os.path.abspath(new_path),
             "make_time": make_time_str,
             "platform": platform,
-            "metadata": metadata_dict
+            "metadata": sanitize_metadata(metadata_dict)
         }
 
     except Exception as e:

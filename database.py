@@ -1,8 +1,23 @@
 import sqlite3
 import json
+import math
 from typing import Optional
 
+
 DB_FILE = "image_gallery.db"
+
+def sanitize_metadata(obj):
+    """
+    Recursively replaces non-JSON compliant float values (NaN, Inf) with None.
+    """
+    if isinstance(obj, dict):
+        return {k: sanitize_metadata(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_metadata(i) for i in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+    return obj
 
 def create_table_if_not_exists():
     """테이블이 존재하지 않으면 생성합니다."""
@@ -156,7 +171,7 @@ def get_image_by_id(image_id):
         return None
     
     image_dict = dict(image)
-    image_dict['metadata'] = json.loads(image_dict['metadata'])
+    image_dict['metadata'] = sanitize_metadata(json.loads(image_dict['metadata']))
     return image_dict
 
 def delete_images_by_ids(image_ids: list[int]) -> list[str]:

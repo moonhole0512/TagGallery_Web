@@ -12,40 +12,78 @@
 
 <body>
     <!-- Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top custom-navbar">
         <div class="container-fluid">
-            <a class="navbar-brand" href="#">Tag Gallery</a>
-            <div class="d-flex ms-auto align-items-center">
-                <input class="form-control me-2" type="search" id="searchInput" placeholder="Search tags..."
-                    aria-label="Search">
-                <select class="form-select me-2" id="sortSelect" style="width: auto;">
-                    <option value="random" selected>Random</option>
-                    <option value="desc">Newest</option>
-                    <option value="asc">Oldest</option>
-                </select>
-                <select class="form-select me-2" id="platformSelect" style="width: auto;">
-                    <option value="all" selected>All</option>
-                    <option value="NovelAI">NovelAI</option>
-                    <option value="StableDiffusion">StableDiffusion</option>
-                    <option value="ComfyUI">ComfyUI</option>
-                    <option value="none">None</option>
-                </select>
-                <button class="btn btn-secondary me-2" id="searchButton">Search</button>
-                <div class="form-check form-check-inline me-2 mb-0">
-                    <input class="form-check-input" type="checkbox" id="videoOnlyCheckbox">
-                    <label class="form-check-label text-light" for="videoOnlyCheckbox">Video Only</label>
+            <a class="navbar-brand fw-bold" href="#">
+                <span class="text-primary">Tag</span>Gallery
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <!-- Search and Filter Group -->
+                <div class="d-flex flex-grow-1 mx-lg-4 my-2 my-lg-0 align-items-center search-group">
+                    <div class="input-group">
+                        <input class="form-control" type="search" id="searchInput"
+                            placeholder="Search tags (prompt, uc)...">
+                        <button class="btn btn-primary" id="searchButton">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
-                <button class="btn btn-danger me-2" id="deleteModeButton">Delete</button>
-                <button class="btn btn-info me-2" id="scanButton">Scan</button>
-                <button class="btn btn-warning" id="settingsButton" data-bs-toggle="modal"
-                    data-bs-target="#settingsModal">Settings</button>
+
+                <!-- Selectors and Options -->
+                <div class="d-flex flex-column flex-lg-row align-items-lg-center gap-2 mb-2 mb-lg-0">
+                    <select class="form-select" id="sortSelect">
+                        <option value="random" selected>🎲 Random</option>
+                        <option value="desc">🆕 Newest</option>
+                        <option value="asc">⏳ Oldest</option>
+                    </select>
+                    <select class="form-select" id="platformSelect">
+                        <option value="all" selected>🌐 All Platforms</option>
+                        <option value="NovelAI">🎨 NovelAI</option>
+                        <option value="StableDiffusion">🧠 StableDiffusion</option>
+                        <option value="ComfyUI">🛠 ComfyUI</option>
+                        <option value="none">❓ Unknown</option>
+                    </select>
+                    <div class="form-check form-switch ms-lg-2">
+                        <input class="form-check-input" type="checkbox" id="videoOnlyCheckbox">
+                        <label class="form-check-label text-light small no-wrap" for="videoOnlyCheckbox">Video
+                            Only</label>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-flex gap-2 ms-lg-auto align-items-center">
+                    <div id="scanProgress" class="spinner-grow spinner-grow-sm text-info me-2 d-none" role="status">
+                        <span class="visually-hidden">Scanning...</span>
+                    </div>
+                    <button class="btn btn-outline-danger btn-sm" id="deleteModeButton">Delete</button>
+                    <button class="btn btn-outline-info btn-sm" id="scanButton">Scan</button>
+                    <button class="btn btn-outline-warning btn-sm" id="settingsButton" data-bs-toggle="modal"
+                        data-bs-target="#settingsModal">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path
+                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                            </path>
+                        </svg>
+                    </button>
+                </div>
             </div>
         </div>
     </nav>
 
     <!-- Main Content -->
     <main class="container-fluid mt-5 pt-3">
-        <div id="image-gallery" class="row g-2">
+        <div id="image-gallery">
             <!-- Images will be loaded here by JavaScript -->
         </div>
         <div id="loading-indicator" class="text-center my-4" style="display: none;">
@@ -94,7 +132,21 @@
                     <h5 class="modal-title" id="imageDetailModalLabel">Image Details</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body position-relative">
+                    <!-- Navigation Buttons Overlay -->
+                    <button class="btn btn-dark modal-nav-btn prev-btn" id="prevImageBtn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <button class="btn btn-dark modal-nav-btn next-btn" id="nextImageBtn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+
                     <div class="row">
                         <div class="col-12 text-center mb-3">
                             <img id="detailImage" src="" class="img-fluid w-100" alt="Detailed view"

@@ -24,6 +24,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentSeed = null;
     let isLoading = false;
     let hasMore = true;
+    let currentImages = []; // 현재 표시 중인 이미지 목록 트래킹
+    let currentImageIndex = -1; // 현재 모달에 표시 중인 이미지 인덱스
+    let columns = []; // 컬럼 DOM 요소들
+    let columnCount = 0;
 
     // --- 삭제 모드 관련 전역 변수 ---
     let isSelectionMode = false;
@@ -31,6 +35,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // ----------------------------
 
     // --- Core Functions ---
+
+    const initColumns = () => {
+        const width = window.innerWidth;
+        let newCount = 6;
+        if (width < 600) newCount = 2;
+        else if (width < 850) newCount = 3;
+        else if (width < 1100) newCount = 4;
+        else if (width < 1400) newCount = 5;
+
+        // 컬럼 수가 변했거나 초기화가 필요한 경우
+        if (newCount !== columnCount || gallery.children.length === 0) {
+            console.log('Initializing columns:', newCount);
+            columnCount = newCount;
+            gallery.innerHTML = '';
+            columns = [];
+            for (let i = 0; i < columnCount; i++) {
+                const col = document.createElement('div');
+                col.className = 'gallery-column';
+                gallery.appendChild(col);
+                columns.push(col);
+            }
+
+            // 만약 기존 이미지가 있다면 재배치
+            if (currentImages.length > 0) {
+                const imagesToRedraw = [...currentImages];
+                currentImages = []; // renderGallery에서 다시 채움
+                renderGallery(imagesToRedraw);
+            }
+        }
+    };
 
     const fetchImages = async (page = 1, query = '', sort_by = 'random', platform_filter = 'all', seed = null, video_only = false) => {
         if (isLoading || (page > 1 && !hasMore)) return;
@@ -48,6 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (page === 1) {
                 gallery.innerHTML = '';
+                currentImages = [];
+                initColumns();
             }
 
             renderGallery(data.images);
@@ -55,14 +91,11 @@ document.addEventListener('DOMContentLoaded', () => {
             hasMore = data.page < data.total_pages;
 
             if (data.images.length === 0 && page === 1) {
-                gallery.innerHTML = '<p class="text-center col-12">No images found. Try scanning or changing your search.</p>';
+                gallery.innerHTML = '<p class="text-center w-100">No images found.</p>';
             }
 
         } catch (error) {
             console.error('Failed to fetch images:', error);
-            if (error.response && error.response.status === 404 && page === 1) {
-                settingsModal.show();
-            }
         } finally {
             isLoading = false;
             loadingIndicator.style.display = 'none';
@@ -70,9 +103,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const renderGallery = (images) => {
+        if (columns.length === 0) initColumns();
+
         images.forEach(image => {
-            const col = document.createElement('div');
-            col.className = 'col-6 col-sm-4 col-md-3 col-lg-2';
+            if (!currentImages.find(img => img.no === image.no)) {
+                currentImages.push(image);
+            }
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'gallery-item-wrapper';
 
             const isVideo = image.filepath.toLowerCase().endsWith('.mp4') ||
                 image.filepath.toLowerCase().endsWith('.webm') ||
@@ -80,17 +119,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const thumbUrl = isVideo ? image.filepath + ".thumb.jpg" : image.filepath;
 
-            col.innerHTML = `
+            wrapper.innerHTML = `
                 <div class="card bg-secondary gallery-item" data-image-id="${image.no}">
                     <img src="${thumbUrl}" class="card-img-top" alt="Image ${image.no}" loading="lazy" onerror="this.src='${image.filepath}'; this.onerror=null;">
                     <div class="platform-overlay">${image.platform}</div>
                     ${isVideo ? '<div class="video-overlay">VIDEO</div>' : ''}
-                    <div class="selection-overlay"></div> <!-- 선택 표시 오버레이 -->
+                    <div class="selection-overlay"></div>
                 </div>
             `;
-            gallery.appendChild(col);
+
+            // 순차적으로 배분 (높이가 낮을 곳을 찾는 대신 가장 자수 가구가 적은 컬럼 선택)
+            const shortestColumn = columns.reduce((prev, curr) =>
+                prev.children.length <= curr.children.length ? prev : curr
+            );
+            shortestColumn.appendChild(wrapper);
         });
-        updateGalleryVisuals(); // 갤러리 로드 후 시각적 상태 업데이트
+        updateGalleryVisuals();
     };
 
     const renderMetadata = (metadata) => {
@@ -260,6 +304,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const navigateImage = (direction) => {
+        if (currentImages.length === 0 || currentImageIndex === -1) return;
+
+        let nextIndex = currentImageIndex + direction;
+
+        // 범위 체크
+        if (nextIndex < 0) return;
+        if (nextIndex >= currentImages.length) {
+            // 더 불러올 데이터가 있다면 시도
+            if (hasMore && !isLoading) {
+                fetchImages(currentPage + 1, currentQuery, currentSort, currentPlatformFilter, currentSeed, currentVideoOnly).then(() => {
+                    // 성공적으로 불러왔다면 다시 시도
+                    if (nextIndex < currentImages.length) {
+                        currentImageIndex = nextIndex;
+                        fetchImageDetails(currentImages[currentImageIndex].no);
+                    }
+                });
+            }
+            return;
+        }
+
+        currentImageIndex = nextIndex;
+        fetchImageDetails(currentImages[currentImageIndex].no);
+    };
+
     // --- 갤러리 시각적 상태 업데이트 함수 ---
     const updateGalleryVisuals = () => {
         console.log('updateGalleryVisuals called. isSelectionMode:', isSelectionMode, 'selectedImageIds.size:', selectedImageIds.size);
@@ -337,10 +406,20 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('scanButton').addEventListener('click', async () => {
         if (confirm('Start scanning for new images in the source directory? This may take a while.')) {
             try {
+                const progress = document.getElementById('scanProgress');
+                if (progress) progress.classList.remove('d-none');
+
                 await axios.post('/api/scan');
                 alert('Image scan started in the background.');
+
+                // 스캔 시작 후 일정 시간 뒤에 스피너 숨김 (실제 완료 체크 로직이 없으므로 임시)
+                setTimeout(() => {
+                    if (progress) progress.classList.add('d-none');
+                }, 5000);
             } catch (error) {
                 alert(`Failed to start scan: ${error.response.data.detail}`);
+                const progress = document.getElementById('scanProgress');
+                if (progress) progress.classList.add('d-none');
             }
         }
     });
@@ -387,6 +466,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            initColumns();
+        }, 200);
+    });
+
+    // --- Keyboard Navigation ---
+    document.addEventListener('keydown', (e) => {
+        // 모달이 열려 있을 때만 동작
+        const modalEl = document.getElementById('imageDetailModal');
+        const isOpen = modalEl.classList.contains('show');
+
+        if (isOpen) {
+            if (e.key === 'ArrowLeft') {
+                navigateImage(-1);
+            } else if (e.key === 'ArrowRight') {
+                navigateImage(1);
+            }
+            // ESC는 부트스트랩이 알아서 처리함
+        }
+    });
+
+    document.getElementById('prevImageBtn').addEventListener('click', () => navigateImage(-1));
+    document.getElementById('nextImageBtn').addEventListener('click', () => navigateImage(1));
+
     document.getElementById('videoOnlyCheckbox').addEventListener('change', handleSearch);
 
     gallery.addEventListener('click', (e) => {
@@ -408,7 +514,8 @@ document.addEventListener('DOMContentLoaded', () => {
             updateGalleryVisuals(); // 시각적 상태 업데이트
         } else {
             // 일반 모드에서는 상세 이미지 보기
-            console.log('Normal mode: Fetching details for imageId', imageId);
+            currentImageIndex = currentImages.findIndex(img => img.no === imageId);
+            console.log('Normal mode: Fetching details for imageId', imageId, 'index', currentImageIndex);
             fetchImageDetails(imageId);
         }
     });
