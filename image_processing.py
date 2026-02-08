@@ -13,6 +13,62 @@ import math
 
 logger = logging.getLogger("uvicorn")
 
+def parse_sd_parameters(params_str):
+    """
+    Stable Diffusion의 parameters 문자열을 파싱하여 개별 필드로 분리합니다.
+    (Prompt, Negative Prompt, Steps, Seed, Sampler 등)
+    """
+    if not params_str:
+        return {}
+    
+    metadata = {}
+    
+    # 1. Negative prompt 분리
+    parts = params_str.split('Negative prompt: ')
+    if len(parts) > 1:
+        metadata['prompt'] = parts[0].strip()
+        remaining = parts[1]
+        
+        # 2. 파라미터 라인 분리 (보통 마지막 라인)
+        lines = remaining.split('\n')
+        if len(lines) > 1:
+            metadata['negative prompt'] = '\n'.join(lines[:-1]).strip()
+            params_line = lines[-1]
+        else:
+            # 한 줄에 다 있는 경우 (드문 케이스)
+            if 'Steps: ' in remaining:
+                p_parts = remaining.split('Steps: ')
+                metadata['negative prompt'] = p_parts[0].strip()
+                params_line = 'Steps: ' + p_parts[1]
+            else:
+                metadata['negative prompt'] = remaining.strip()
+                params_line = ""
+    else:
+        # Negative prompt가 없는 경우
+        if 'Steps: ' in params_str:
+            p_parts = params_str.split('Steps: ')
+            metadata['prompt'] = p_parts[0].strip()
+            params_line = 'Steps: ' + p_parts[1]
+        else:
+            metadata['prompt'] = params_str.strip()
+            params_line = ""
+
+    # 3. 상세 파라미터 (Steps, Sampler, CFG, Seed 등) 파싱
+    if params_line:
+        import re
+        # ", Key: " 패턴을 기준으로 분할 (ADetailer 등 따옴표 안의 콤마 무시 시도)
+        pairs = re.split(r', (?=[A-Z][a-zA-Z0-9\s]+: )', params_line)
+        for pair in pairs:
+            if ':' in pair:
+                k, v = pair.split(':', 1)
+                # v가 따옴표로 감싸져 있으면 제거
+                val = v.strip()
+                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                    val = val[1:-1]
+                metadata[k.strip()] = val
+                
+    return metadata
+
 def sanitize_metadata(obj):
     """
     Recursively replaces non-JSON compliant float values (NaN, Inf) with None.
@@ -349,7 +405,8 @@ def process_image(file_path, dest_root_path):
                             metadata_dict['Source'] = raw_metadata.get('Source')
                             metadata_dict['Title'] = raw_metadata.get('Title')
                         elif 'parameters' in raw_metadata: # Stable Diffusion
-                            metadata_dict['prompt'] = raw_metadata['parameters']
+                            sd_meta = parse_sd_parameters(raw_metadata['parameters'])
+                            metadata_dict.update(sd_meta)
                             metadata_dict['Software'] = 'StableDiffusion'
                         elif 'prompt' in raw_metadata: # ComfyUI
                             metadata_dict['prompt'] = json.loads(raw_metadata['prompt'])

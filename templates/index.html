@@ -53,6 +53,11 @@
                         <option value="none">❓ Unknown</option>
                     </select>
                     <div class="form-check form-switch ms-lg-2">
+                        <input class="form-check-input" type="checkbox" id="favoriteOnlyCheckbox">
+                        <label class="form-check-label text-light small no-wrap" for="favoriteOnlyCheckbox">❤️
+                            Favorites</label>
+                    </div>
+                    <div class="form-check form-switch ms-lg-1">
                         <input class="form-check-input" type="checkbox" id="videoOnlyCheckbox">
                         <label class="form-check-label text-light small no-wrap" for="videoOnlyCheckbox">Video
                             Only</label>
@@ -61,20 +66,19 @@
 
                 <!-- Action Buttons -->
                 <div class="d-flex gap-2 ms-lg-auto align-items-center">
-                    <div id="scanProgress" class="spinner-grow spinner-grow-sm text-info me-2 d-none" role="status">
-                        <span class="visually-hidden">Scanning...</span>
+                    <div id="scanProgressContainer" class="d-none flex-grow-1 mx-2" style="min-width: 150px;">
+                        <div class="progress" style="height: 10px;">
+                            <div id="scanProgressBar"
+                                class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                                role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <small id="scanProgressText" class="text-info" style="font-size: 0.7rem;"></small>
                     </div>
                     <button class="btn btn-outline-danger btn-sm" id="deleteModeButton">Delete</button>
                     <button class="btn btn-outline-info btn-sm" id="scanButton">Scan</button>
                     <button class="btn btn-outline-warning btn-sm" id="settingsButton" data-bs-toggle="modal"
                         data-bs-target="#settingsModal">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path
-                                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-                            </path>
-                        </svg>
+                        ⚙️
                     </button>
                 </div>
             </div>
@@ -82,16 +86,86 @@
     </nav>
 
     <!-- Main Content -->
-    <main class="container-fluid mt-5 pt-3">
-        <div id="image-gallery">
-            <!-- Images will be loaded here by JavaScript -->
+    <main class="container-fluid py-4" style="margin-top: 70px;">
+        <div id="image-gallery" class="gallery-container">
+            <!-- Columns and images will be dynamically added here -->
         </div>
-        <div id="loading-indicator" class="text-center my-4" style="display: none;">
+        <div id="loading-indicator" class="text-center p-5" style="display: none;">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
         </div>
     </main>
+
+    <!-- Image Detail Modal -->
+    <div class="modal fade" id="imageDetailModal" tabindex="-1" aria-labelledby="imageDetailModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageDetailModalLabel">Image Details</h5>
+                    <div class="d-flex align-items-center">
+                        <button class="btn btn-sm btn-outline-danger" id="detailFavoriteBtn">🤍</button>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0 overflow-hidden">
+                    <div class="container-fluid p-0">
+                        <div class="row g-0">
+                            <!-- Left: Main Content (Centered Image + Metadata) -->
+                            <div class="col-lg-9 d-flex flex-column bg-black border-end border-secondary"
+                                style="height: 85vh;">
+                                <!-- Navigation Buttons Overlay (Now restricted to the left column) -->
+                                <div class="position-relative flex-grow-1" style="min-height: 50vh; overflow: hidden;">
+                                    <button class="btn btn-dark modal-nav-btn prev-btn" id="prevImageBtn">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <polyline points="15 18 9 12 15 6"></polyline>
+                                        </svg>
+                                    </button>
+                                    <button class="btn btn-dark modal-nav-btn next-btn" id="nextImageBtn">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2">
+                                            <polyline points="9 18 15 12 9 6"></polyline>
+                                        </svg>
+                                    </button>
+
+                                    <div id="zoomWrapper" class="h-100 d-flex align-items-center justify-content-center"
+                                        style="transition: transform 0.1s ease-out; transform-origin: center;">
+                                        <img id="detailImage" src="" class="img-fluid" alt="Detailed view"
+                                            style="max-height: 100%; width: auto; object-fit: contain;">
+                                    </div>
+                                </div>
+
+                                <!-- Metadata Area (Below Image, still in left col) -->
+                                <div class="p-3 bg-dark border-top border-secondary"
+                                    style="height: 35vh; overflow-y: auto;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="mb-0 text-secondary">Metadata</h6>
+                                    </div>
+                                    <div id="metadata-container">
+                                        <!-- Metadata will be loaded here -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right: Similar Images Sidebar -->
+                            <div class="col-lg-3 bg-dark d-flex flex-column" style="height: 85vh;">
+                                <div class="p-3 border-bottom border-secondary">
+                                    <h6 class="mb-0">Discovery</h6>
+                                    <small class="text-muted">Similar Images</small>
+                                </div>
+                                <div id="similar-images-container" class="flex-grow-1 p-3 overflow-auto sidebar-scroll"
+                                    style="scrollbar-width: thin; background: rgba(0,0,0,0.1);">
+                                    <!-- Similar images will be loaded here (Vertical) -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Settings Modal -->
     <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
@@ -104,62 +178,18 @@
                 <div class="modal-body">
                     <form id="settingsForm">
                         <div class="mb-3">
-                            <label for="image_file_path" class="form-label">Source Image Path</label>
-                            <input type="text" class="form-control" id="image_file_path" required>
-                            <div class="form-text">Path to the directory with unsorted images.</div>
+                            <label for="image_file_path" class="form-label">Source Path (Images to process)</label>
+                            <input type="text" class="form-control bg-dark text-light" id="image_file_path" required>
                         </div>
                         <div class="mb-3">
-                            <label for="des_file_path" class="form-label">Destination Image Path</label>
-                            <input type="text" class="form-control" id="des_file_path" required>
-                            <div class="form-text">Path where the sorted images will be stored.</div>
+                            <label for="des_file_path" class="form-label">Destination Path (Classified library)</label>
+                            <input type="text" class="form-control bg-dark text-light" id="des_file_path" required>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="button" class="btn btn-primary" id="saveSettingsButton">Save changes</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Image Detail Modal -->
-    <div class="modal fade" id="imageDetailModal" tabindex="-1" aria-labelledby="imageDetailModalLabel"
-        aria-hidden="true">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="imageDetailModalLabel">Image Details</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body position-relative">
-                    <!-- Navigation Buttons Overlay -->
-                    <button class="btn btn-dark modal-nav-btn prev-btn" id="prevImageBtn">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="15 18 9 12 15 6"></polyline>
-                        </svg>
-                    </button>
-                    <button class="btn btn-dark modal-nav-btn next-btn" id="nextImageBtn">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="9 18 15 12 9 6"></polyline>
-                        </svg>
-                    </button>
-
-                    <div class="row">
-                        <div class="col-12 text-center mb-3">
-                            <img id="detailImage" src="" class="img-fluid w-100" alt="Detailed view"
-                                style="max-height: 70vh; object-fit: contain;">
-                        </div>
-                        <div class="col-12">
-                            <h6>Metadata</h6>
-                            <div id="metadata-container" class="p-2 rounded"
-                                style="max-height: 40vh; overflow-y: auto;">
-                                <!-- Metadata will be loaded here -->
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>

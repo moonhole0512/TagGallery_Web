@@ -23,6 +23,14 @@ CONFIG_FILE = "config.json"
 
 app = FastAPI()
 
+# --- Global Scan Status ---
+SCAN_STATUS = {
+    "is_running": False,
+    "current": 0,
+    "total": 0,
+    "message": ""
+}
+
 # --- Mount static files for the frontend ---
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -46,10 +54,8 @@ def get_config(mount_images=True):
         return None
     with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
         config_data = json.load(f)
-        if mount_images and os.path.isdir(config_data.get("des_file_path", "")):
-            # To avoid errors on reload, we can try to unmount first, but a simple
-            # check and mount is often sufficient if the path doesn't change.
-            # A more robust solution would manage mounts more carefully if paths change frequently.
+        logger.info(f"Loaded config: {config_data}")
+        if mount_images and config_data.get("des_file_path") and os.path.isdir(config_data["des_file_path"]):
             app.mount("/images", StaticFiles(directory=config_data["des_file_path"]), name="images")
         return config_data
 
@@ -63,12 +69,21 @@ def save_config(config: AppConfig):
 # --- Background Task for Scanning ---
 def scan_and_process_images(source_path: str, dest_path: str):
     """Scans the source path for images and processes them in the background."""
-    database.create_table_if_not_exists() # Ensure table exists for the background process
+    global SCAN_STATUS
+    database.create_table_if_not_exists() 
+    
+    SCAN_STATUS["is_running"] = True
+    SCAN_STATUS["message"] = "파일 검색 중..."
+    
     logger.info(f"Starting scan in background: {source_path}")
     extensions = ['*.png', '*.jpg', '*.jpeg', '*.webp', '*.mp4', '*.webm', '*.gif']
     files = []
     for ext in extensions:
         files.extend(glob.glob(os.path.join(source_path, '**', ext), recursive=True))
+    
+    SCAN_STATUS["total"] = len(files)
+    SCAN_STATUS["current"] = 0
+    SCAN_STATUS["message"] = "이미지 처리 중..."
     
     processed_count = 0
     for file in files:
@@ -77,16 +92,22 @@ def scan_and_process_images(source_path: str, dest_path: str):
             if image_data:
                 database.add_image_info(image_data)
                 processed_count += 1
-                logger.info(f"Processed: {file}")
+            SCAN_STATUS["current"] += 1
         except Exception as e:
             logger.error(f"Failed to process {file}: {e}")
+            SCAN_STATUS["current"] += 1
+            
     logger.info(f"Background scan finished. Processed {processed_count} files.")
+    SCAN_STATUS["message"] = "폴더 정리 중..."
     
     # 비어있는 폴더 정리
     try:
         image_processing.remove_empty_folders(source_path)
     except Exception as e:
         logger.error(f"Failed to cleanup empty folders: {e}")
+        
+    SCAN_STATUS["is_running"] = False
+    SCAN_STATUS["message"] = f"완료 ({processed_count}개 처리됨)"
 
 # --- API Endpoints ---
 @app.on_event("startup")
@@ -97,6 +118,7 @@ def startup_event():
     print("  LOGGING IS ACTIVE", flush=True)
     print("="*50 + "\n", flush=True)
     print("Startup event triggered.", flush=True)
+    database.create_table_if_not_exists()
     get_config(mount_images=True)
 
 @app.get("/")
@@ -109,7 +131,9 @@ def read_config():
     """Returns the current configuration."""
     config = get_config(mount_images=False)
     if not config:
+        logger.warning("Configuration file not found.")
         raise HTTPException(status_code=404, detail="Configuration not found. Please set it up.")
+    logger.info(f"API returning config: {config}")
     return config
 
 @app.post("/api/config")
@@ -127,6 +151,9 @@ def write_config(config: AppConfig):
 @app.post("/api/scan")
 def start_scan(background_tasks: BackgroundTasks):
     """Starts the image scan and classification in the background."""
+    if SCAN_STATUS["is_running"]:
+        return {"message": "Image scan is already running.", "status": SCAN_STATUS}
+        
     config = get_config(mount_images=False)
     if not config or not config.get("image_file_path") or not config.get("des_file_path"):
         raise HTTPException(status_code=400, detail="Configuration is not set properly.")
@@ -138,25 +165,35 @@ def start_scan(background_tasks: BackgroundTasks):
     background_tasks.add_task(scan_and_process_images, source_path, dest_path)
     return {"message": "Image scan started in the background."}
 
+@app.get("/api/scan/status")
+def get_scan_status():
+    """Returns the current status of the background scan."""
+    return SCAN_STATUS
+
+def _format_image_path(image, config):
+    """Helper to convert absolute path to /images/ relative URL."""
+    if not config:
+        return image
+    base_path = config["des_file_path"]
+    if os.path.exists(image["filepath"]):
+        relative_path = os.path.relpath(image["filepath"], base_path)
+        image["filepath"] = "/images/" + relative_path.replace("\\", "/")
+    else:
+        image["filepath"] = "/static/placeholder.png"
+    return image
+
 @app.get("/api/images")
-def get_all_images(page: int = 1, limit: int = 50, query: Optional[str] = None, sort_by: str = "random", platform_filter: str = "all", seed: Optional[str] = None, video_only: bool = False):
+def get_all_images(page: int = 1, limit: int = 50, query: Optional[str] = None, sort_by: str = "random", platform_filter: str = "all", seed: Optional[str] = None, video_only: bool = False, favorites_only: bool = False):
     """Retrieves a paginated list of images, with optional search, sorting and platform filtering."""
     try:
-        # seed가 문자열로 오거나 null일 수 있으므로 정수로 변환 시도
         parsed_seed = None
         if seed and seed.isdigit():
             parsed_seed = int(seed)
         
-        result = database.get_images(page, limit, query, sort_by, platform_filter, parsed_seed, video_only)
+        result = database.get_images(page, limit, query, sort_by, platform_filter, parsed_seed, video_only, favorites_only)
         config = get_config(mount_images=False)
-        if config:
-            base_path = config["des_file_path"]
-            for img in result["images"]:
-                if os.path.exists(img["filepath"]):
-                    relative_path = os.path.relpath(img["filepath"], base_path)
-                    img["filepath"] = "/images/" + relative_path.replace("\\", "/")
-                else:
-                    img["filepath"] = "/static/placeholder.png" # Placeholder for missing files
+        for img in result["images"]:
+            _format_image_path(img, config)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve images: {e}")
@@ -170,17 +207,31 @@ def get_single_image(image_id: int):
             raise HTTPException(status_code=404, detail="Image not found")
         
         config = get_config(mount_images=False)
-        if config:
-            base_path = config["des_file_path"]
-            if os.path.exists(image["filepath"]):
-                relative_path = os.path.relpath(image["filepath"], base_path)
-                image["filepath"] = "/images/" + relative_path.replace("\\", "/")
-            else:
-                image["filepath"] = "/static/placeholder.png"
-        
+        _format_image_path(image, config)
         return image
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve image details: {e}")
+
+@app.post("/api/images/{image_id}/favorite")
+def toggle_favorite(image_id: int, favorite: bool):
+    """Toggles the favorite status of an image."""
+    try:
+        database.update_image_favorite(image_id, favorite)
+        return {"message": "Favorite status updated."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update favorite status: {e}")
+
+@app.get("/api/images/{image_id}/similar")
+def get_similar_images_api(image_id: int, limit: int = 20):
+    """Fetches images similar to the given image ID."""
+    try:
+        results = database.get_similar_images(image_id, limit)
+        config = get_config(mount_images=False)
+        for img in results:
+            _format_image_path(img, config)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch similar images: {e}")
 
 @app.delete("/api/images/batch")
 def delete_images_batch(request: DeleteRequest):
